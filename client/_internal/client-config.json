@@ -1,0 +1,7 @@
+{
+  "server_url": "ws://192.168.56.1:8000/ws",
+  "client_id": "TEST_1",
+  "reconnect": false,
+  "reconnect_delay_seconds": 5,
+  "reconnect_delay": 5
+}
