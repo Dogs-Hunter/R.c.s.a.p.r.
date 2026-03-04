@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Главная страница</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #1f2937;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --accent-strong: #0b4f4a;
+            --panel: #f7f4ef;
+        }
+        body {
+            padding: 24px;
+            background: radial-gradient(circle at 20% 10%, #fdf7ef 0%, #eef4f2 60%, #eaf0f5 100%);
+            color: var(--ink);
+            font-family: "Manrope", "Segoe UI", sans-serif;
+        }
+        .hero {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 32px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+        .hero h1 {
+            font-size: 2.2rem;
+        }
+        .hero .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .status-card,
+        .how-card {
+            border-radius: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+        .step {
+            background: var(--panel);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .step span {
+            color: var(--accent-strong);
+            font-weight: 600;
+        }
+        code {
+            color: var(--accent-strong);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero mb-4">
+            <div class="row align-items-center">
+                <div class="col-lg-7">
+                    <h1 class="mb-3">Удаленная отправка команд и отчеты процессов.</h1>
+                    <p class="text-muted mb-4">Подключайте клиентов, запускайте разрешенные команды и получайте обновляемые отчеты.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/processes" class="btn btn-primary" aria-label="View Processes">Просмотр процессов</a>
+                        <a href="/command" class="btn btn-outline-secondary" aria-label="Run Command">Выполнить команду</a>
+                        <a href="/clients-ui" class="btn btn-outline-secondary">Клиенты</a>
+                    </div>
+                </div>
+                <div class="col-lg-5 mt-4 mt-lg-0">
+                    <div class="card status-card">
+                        <div class="card-body">
+                            <h5 class="mb-2">Сводка статуса</h5>
+                            <div class="text-muted">Подключенные клиенты</div>
+                            <div class="fs-4 fw-semibold">{{ clients|length }}</div>
+                            <div class="text-muted mt-3">Последний отчет</div>
+                            <div class="fw-semibold">
+                                {% set latest_report = None %}
+                                {% for client in clients %}
+                                    {% if client.last_report and (latest_report is none or client.last_report > latest_report) %}
+                                        {% set latest_report = client.last_report %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ latest_report.strftime('%Y-%m-%d %H:%M:%S') if latest_report else 'Нет отчетов' }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card how-card">
+                    <div class="card-body">
+                        <h2 class="mb-3">Как запускать и работать</h2>
+                        <div class="step">
+                            <h5 class="mt-2">1. Запустите сервер</h5>
+                        </div>
+                        <div class="step">
+                            <h5 class="mt-2">2. Подключите клиента</h5>
+                            <p class="text-muted mb-0">Запустите клиент: <code>python client.py --client-id workstation-01 --server ws://{IP_WIFI}:8000/ws</code>.</p>
+                        </div>
+                        <div class="step">
+                            <h5 class="mt-2">3. Работайте через UI</h5>
+                            <p class="text-muted mb-0">Откройте <code>/processes</code> для отчетов или <code>/command</code> для ручного запуска команд.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card status-card">
+                    <div class="card-body">
+                        <h5 class="mb-3">Быстрые ссылки</h5>
+                        <div class="d-grid gap-2">
+                            <a href="/processes" class="btn btn-outline-secondary" aria-label="View Processes">Просмотр процессов</a>
+                            <a href="/command" class="btn btn-outline-secondary" aria-label="Run Command">Выполнить команду</a>
+                            <a href="/clients-ui" class="btn btn-outline-secondary">Клиенты</a>
+                            <a href="/config" class="btn btn-outline-secondary">Конфигурация</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
