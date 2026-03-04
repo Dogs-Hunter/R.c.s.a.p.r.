@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Процессы</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #1f2937;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --accent-strong: #0b4f4a;
+            --surface: #ffffff;
+            --panel: #f7f4ef;
+        }
+        body {
+            padding: 24px;
+            background: radial-gradient(circle at 15% 10%, #fdf7ef 0%, #eef4f2 60%, #eaf0f5 100%);
+            color: var(--ink);
+            font-family: "Manrope", "Segoe UI", sans-serif;
+        }
+        .page-header {
+            background: var(--surface);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+        .table thead th {
+            background: var(--panel);
+            color: var(--ink);
+        }
+        .table td.align-top,
+        .table th.align-top {
+            vertical-align: top;
+        }
+        .process-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .process-group {
+            background: var(--surface);
+            border-radius: 14px;
+            padding: 10px 14px 14px;
+            border: 1px solid #e5e7eb;
+        }
+        .process-group summary {
+            cursor: pointer;
+            font-weight: 700;
+            color: var(--accent);
+            list-style: none;
+        }
+        .process-group summary::-webkit-details-marker {
+            display: none;
+        }
+        .process-item {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+        }
+        .process-item summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--accent-strong);
+        }
+        .process-details {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .status-pill {
+            font-size: 0.85rem;
+            color: var(--accent-strong);
+        }
+        .empty-state {
+            background: var(--surface);
+            border-radius: 18px;
+            padding: 32px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item active">Processes</li>
+            </ol>
+        </nav>
+
+        <div class="page-header mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h1 class="mb-2">Процессы</h1>
+                    <p class="text-muted mb-0">Просматривайте отчеты по каждому клиенту.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="/clients-ui">Клиенты</a>
+                    <a class="btn btn-outline-secondary" href="/command">Выполнить команду</a>
+                    <button class="btn btn-outline-secondary" onclick="location.reload()">Перезагрузка</button>
+                </div>
+            </div>
+        </div>
+
+        {% if clients %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th class="align-top">ID Клиента</th>
+                        <th class="align-top">Пользователь</th>
+                        <th>Процесссы</th>
+                        <th class="align-top">Обновить отчет</th>
+                    </tr>
+                </thead>
+                <tbody id="processesTable">
+                    {% for client in clients %}
+                    <tr data-client-id="{{ client.client_id }}">
+                        <td class="mono align-top">{{ client.client_id }}</td>
+                        <td class="align-top">
+                            <div>{{ client.user or "—" }}</div>
+                            <div class="text-muted small">{{ client.address }}</div>
+                        </td>
+                        <td>
+                            <div class="status-pill" data-role="status">Нет отчета</div>
+                            <div class="process-list mt-2" data-role="processes"></div>
+                        </td>
+                        <td class="align-top">
+                            <button class="btn btn-sm btn-primary" data-action="refresh">Обновить</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h4>No clients connected</h4>
+            <p class="text-muted">Подключите клиента через WebSocket <code>/ws</code>, чтобы получать отчеты процессов.</p>
+            <a class="btn btn-primary" href="/clients-ui">Go to Clients</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        const PROCESS_COMMAND = "Get-Process -ErrorAction SilentlyContinue | Select-Object Name,Id,CPU,WorkingSet,StartTime,Path,Company,Description,MainWindowTitle,TotalProcessorTime | ConvertTo-Json -Depth 3";
+        const PROCESS_CORRELATION_ID = "process_report";
+        const clientState = {};
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return "N/A";
+            const units = ["B", "KB", "MB", "GB", "TB"];
+            let value = Number(bytes);
+            let unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+            return `${value.toFixed(1)} ${units[unitIndex]}`;
+        }
+
+        function normalizeProcesses(raw) {
+            if (!raw) return [];
+            const list = Array.isArray(raw) ? raw : [raw];
+            return list.map((proc) => ({
+                id: proc.Id ?? proc.id ?? proc.PID ?? null,
+                name: proc.Name ?? proc.ProcessName ?? "Unknown",
+                cpu: proc.CPU ?? proc.Cpu ?? null,
+                memory: proc.WorkingSet ?? proc.WorkingSet64 ?? proc.Memory ?? null,
+                startTime: proc.StartTime ?? null,
+                path: proc.Path ?? null,
+                description: proc.Description ?? null,
+                company: proc.Company ?? null,
+                windowTitle: proc.MainWindowTitle ?? null,
+                totalProcessorTime: proc.TotalProcessorTime ?? null
+            }));
+        }
+
+        function createDetailRow(label, value) {
+            const row = document.createElement("div");
+            const strong = document.createElement("strong");
+            strong.textContent = `${label}: `;
+            row.appendChild(strong);
+            const span = document.createElement("span");
+            span.textContent = value ?? "Not available";
+            row.appendChild(span);
+            return row;
+        }
+
+        function renderProcessList(container, processes) {
+            const listEl = container.querySelector('[data-role="processes"]');
+            listEl.innerHTML = "";
+
+            if (!processes.length) {
+                const empty = document.createElement("div");
+                empty.className = "text-muted";
+                empty.textContent = "Нет данных";
+                listEl.appendChild(empty);
+                return;
+            }
+
+            const group = document.createElement("details");
+            group.className = "process-group";
+            group.open = false;
+
+            const groupSummary = document.createElement("summary");
+            groupSummary.textContent = `Процессы (${processes.length})`;
+            group.appendChild(groupSummary);
+
+            const groupBody = document.createElement("div");
+            groupBody.className = "process-list";
+
+            processes.forEach((proc) => {
+                const details = document.createElement("details");
+                details.className = "process-item";
+
+                const summary = document.createElement("summary");
+                summary.textContent = `${proc.name} (PID ${proc.id ?? "—"})`;
+                details.appendChild(summary);
+
+                const body = document.createElement("div");
+                body.className = "process-details";
+                body.appendChild(createDetailRow("CPU", proc.cpu ?? "—"));
+                body.appendChild(createDetailRow("Memory", formatBytes(proc.memory)));
+                body.appendChild(createDetailRow("Start time", proc.startTime));
+                body.appendChild(createDetailRow("Path", proc.path));
+                body.appendChild(createDetailRow("Description", proc.description));
+                body.appendChild(createDetailRow("Company", proc.company));
+                body.appendChild(createDetailRow("Main window", proc.windowTitle));
+                body.appendChild(createDetailRow("Total processor time", proc.totalProcessorTime));
+                details.appendChild(body);
+                groupBody.appendChild(details);
+            });
+            group.appendChild(groupBody);
+            listEl.appendChild(group);
+        }
+
+        function setStatus(container, text, isError = false) {
+            const statusEl = container.querySelector('[data-role="status"]');
+            statusEl.textContent = text;
+            statusEl.classList.toggle("text-danger", isError);
+        }
+
+        async function enqueueProcessReport(clientId) {
+            const response = await fetch(`/api/clients/${clientId}/command`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    command: PROCESS_COMMAND,
+                    timeout: 120,
+                    correlation_id: PROCESS_CORRELATION_ID
+                })
+            });
+            return response.json();
+        }
+
+        async function pollJob(jobId) {
+            const response = await fetch(`/api/commands/${jobId}`);
+            return response.json();
+        }
+
+        async function refreshClient(container) {
+            const clientId = container.dataset.clientId;
+            if (clientState[clientId]?.loading) return;
+            clientState[clientId].loading = true;
+            setStatus(container, "Запрос отправлен");
+
+            try {
+                const enqueue = await enqueueProcessReport(clientId);
+                if (enqueue.status !== "queued") {
+                    throw new Error(enqueue.status === "not_connected" ? "Клиент не подключен" : "Команда отклонена");
+                }
+
+                let attempts = 0;
+                let job = null;
+                while (attempts < 120) {
+                    job = await pollJob(enqueue.job_id);
+                    if (["finished", "error", "timeout"].includes(job.status)) {
+                        break;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    attempts += 1;
+                }
+
+                if (!job || job.status !== "finished") {
+                    throw new Error("Отчет не готов");
+                }
+
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(job.stdout || "");
+                } catch (parseError) {
+                    throw new Error("Не удалось разобрать JSON");
+                }
+
+                const processes = normalizeProcesses(parsed);
+                clientState[clientId].processes = processes;
+                renderProcessList(container, processes);
+                setStatus(container, `Обновлено: ${new Date().toLocaleTimeString()}`);
+            } catch (error) {
+                setStatus(container, `Ошибка: ${error.message}`, true);
+            } finally {
+                clientState[clientId].loading = false;
+            }
+        }
+
+        function hydrateFromReport(container, report) {
+            if (!report || !report.stdout) {
+                renderProcessList(container, []);
+                return;
+            }
+            try {
+                const parsed = JSON.parse(report.stdout);
+                const processes = normalizeProcesses(parsed);
+                clientState[container.dataset.clientId].processes = processes;
+                renderProcessList(container, processes);
+                if (report.timestamp) {
+                    setStatus(container, `Последний отчет: ${new Date(report.timestamp).toLocaleString()}`);
+                }
+            } catch (error) {
+                setStatus(container, "Ошибка отчета", true);
+            }
+        }
+
+        async function fetchClientsAndHydrate() {
+            try {
+                const response = await fetch("/api/clients");
+                const data = await response.json();
+                data.clients.forEach((client) => {
+                    const row = document.querySelector(`[data-client-id="${client.client_id}"]`);
+                    if (!row) return;
+                    hydrateFromReport(row, client.last_process_report);
+                    const userCell = row.querySelector("td:nth-child(2) div");
+                    if (userCell && client.user) {
+                        userCell.textContent = client.user;
+                    }
+                });
+            } catch (error) {
+                document.querySelectorAll('[data-client-id]').forEach((row) => {
+                    setStatus(row, "Ошибка загрузки", true);
+                });
+            }
+        }
+
+        function initializePage() {
+            document.querySelectorAll('[data-client-id]').forEach((container) => {
+                const clientId = container.dataset.clientId;
+                clientState[clientId] = { processes: [], loading: false };
+                const button = container.querySelector('[data-action="refresh"]');
+                button.addEventListener("click", () => refreshClient(container));
+            });
+
+            fetchClientsAndHydrate();
+        }
+
+        initializePage();
+    </script>
+</body>
+</html>
